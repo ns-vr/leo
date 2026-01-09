@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Mic, QrCode, Eye, ShoppingCart, X, Check, Play, Square } from "lucide-react";
+import { Upload, Mic, QrCode, Eye, ShoppingCart, X, Check, Square, Loader2 } from "lucide-react";
 import QRCode from "react-qr-code";
 import { NeonCard } from "@/components/ui/NeonCard";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { GraffitiHeader } from "@/components/ui/GraffitiHeader";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 type Step = "upload" | "neonify" | "audio" | "qr" | "preview" | "order";
 
@@ -22,6 +23,7 @@ export function KeychainSection() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showCustomFlow, setShowCustomFlow] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
@@ -40,15 +42,55 @@ export function KeychainSection() {
     }
   };
 
-  const handleNeonify = () => {
-    // Simulate AI neonification
-    setTimeout(() => {
+  const handleNeonify = async () => {
+    if (!uploadedImage) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/neonify-image`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ imageBase64: uploadedImage }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Neonification failed");
+      }
+
+      if (data.image) {
+        setNeonifiedImage(data.image);
+        setStep("audio");
+        toast.success("Design neonified! 💀 Now add your audio", {
+          style: { background: "#0A0A0A", border: "2px solid #00D4FF", color: "#00D4FF" },
+        });
+      } else {
+        // If no image generated, use original with filter
+        setNeonifiedImage(uploadedImage);
+        setStep("audio");
+        toast.info(data.textResponse || "Using enhanced original image", {
+          style: { background: "#0A0A0A", border: "2px solid #FFFF00", color: "#FFFF00" },
+        });
+      }
+    } catch (error) {
+      console.error("Neonify error:", error);
+      toast.error(error instanceof Error ? error.message : "Neonification failed", {
+        style: { background: "#0A0A0A", border: "2px solid #FF00FF", color: "#FF00FF" },
+      });
+      // Fallback: use original image
       setNeonifiedImage(uploadedImage);
       setStep("audio");
-      toast.success("Design neonified! 💀 Now add your audio", {
-        style: { background: "#0A0A0A", border: "2px solid #00D4FF", color: "#00D4FF" },
-      });
-    }, 1500);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,6 +132,7 @@ export function KeychainSection() {
     setNeonifiedImage(null);
     setAudioUrl(null);
     setShowCustomFlow(false);
+    setIsProcessing(false);
   };
 
   const renderStep = () => {
@@ -116,7 +159,7 @@ export function KeychainSection() {
             />
             <p className="font-graffiti text-xl text-neon-green mb-2">Upload Your Image</p>
             <p className="text-sm text-muted-foreground font-mono">
-              We'll transform it into neon street art
+              AI will transform it into neon street art
             </p>
           </motion.div>
         );
@@ -132,8 +175,21 @@ export function KeychainSection() {
               <img src={uploadedImage!} alt="Uploaded" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-neon-green/30 to-transparent" />
             </div>
-            <NeonButton variant="cyan" onClick={handleNeonify}>
-              <span className="animate-pulse">✨</span> Neonify It!
+            <NeonButton 
+              variant="cyan" 
+              onClick={handleNeonify}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="animate-spin" size={18} />
+                  AI Processing...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <span className="animate-pulse">✨</span> Neonify with AI
+                </span>
+              )}
             </NeonButton>
           </motion.div>
         );
@@ -298,7 +354,7 @@ export function KeychainSection() {
             <div>
               <h3 className="font-graffiti text-xl text-neon-magenta">Custom Keychain</h3>
               <p className="text-sm text-muted-foreground font-mono mt-1">
-                Image + Audio + QR = Fire 🔥
+                AI Neonify + Audio + QR = Fire 🔥
               </p>
             </div>
             <NeonButton variant="magenta" size="sm" onClick={() => setShowCustomFlow(true)}>
@@ -320,7 +376,7 @@ export function KeychainSection() {
             <NeonCard glowColor="magenta">
               <div className="flex items-center justify-between mb-4">
                 <GraffitiHeader size="sm" glowColor="magenta">
-                  Custom Keychain
+                  AI Custom Keychain
                 </GraffitiHeader>
                 <button onClick={resetFlow} className="text-muted-foreground hover:text-destructive">
                   <X size={20} />

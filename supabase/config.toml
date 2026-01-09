@@ -1,0 +1,10 @@
+project_id = "rkfbkpjwdihiphpyjsrc"
+
+[functions.leo-chat]
+verify_jwt = false
+
+[functions.neonify-image]
+verify_jwt = false
+
+[functions.generate-design]
+verify_jwt = false

@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, Bot, User, Sparkles, X } from "lucide-react";
+import { Send, Mic, Bot, User, Sparkles } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { GraffitiHeader } from "@/components/ui/GraffitiHeader";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface Message {
   id: string;
@@ -16,7 +18,7 @@ const initialMessages: Message[] = [
   {
     id: "1",
     role: "assistant",
-    content: "Yo what's good! 🔥 I'm your street art AI homie. Need a sick hoodie design? Custom keychain with audio? Drop your ideas and let's create something fire! 🎨",
+    content: "Yo what's good! 🔥 I'm Leo, your street art AI homie. Need a sick hoodie design? Custom keychain with audio? Drop your ideas and let's create something fire! 🎨",
     timestamp: new Date(),
   },
 ];
@@ -24,7 +26,7 @@ const initialMessages: Message[] = [
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -36,7 +38,7 @@ export default function Chat() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -47,27 +49,104 @@ export default function Chat() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
-    setIsTyping(true);
+    setIsLoading(true);
 
-    // Simulate AI response (replace with actual API later)
-    setTimeout(() => {
-      const responses = [
-        "That's fire! 🔥 I can totally help you with that. Let me cook up some designs...",
-        "Yo bet! I got you. Here's what I'm thinking for your custom piece...",
-        "Say less! 💀 That's gonna look sick. Want me to generate some mockups?",
-        "Ayy that's a vibe! Let's make it happen. You want neon green or cyan accents?",
-      ];
+    // Prepare messages for API (excluding timestamps and ids)
+    const apiMessages = [...messages, userMessage].map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
 
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: responses[Math.floor(Math.random() * responses.length)],
-        timestamp: new Date(),
-      };
+    let assistantContent = "";
 
-      setMessages((prev) => [...prev, aiMessage]);
-      setIsTyping(false);
-    }, 1500);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/leo-chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ messages: apiMessages }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Chat failed");
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) throw new Error("No response stream");
+
+      // Create the assistant message
+      const assistantId = (Date.now() + 1).toString();
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: "assistant", content: "", timestamp: new Date() },
+      ]);
+
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process SSE lines
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              assistantContent += content;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, content: assistantContent } : m
+                )
+              );
+            }
+          } catch {
+            // Incomplete JSON, put back and wait
+            buffer = line + "\n" + buffer;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      toast.error(error instanceof Error ? error.message : "Chat failed", {
+        style: { background: "#0A0A0A", border: "2px solid #FF00FF", color: "#FF00FF" },
+      });
+
+      // Add error message
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "Yo my bad, something went wrong. Try again? 💀",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -79,10 +158,11 @@ export default function Chat() {
             <span className="flex items-center gap-2">
               <Bot className="text-neon-green" />
               AI Chat
+              <Sparkles size={16} className="text-neon-yellow animate-pulse" />
             </span>
           </GraffitiHeader>
           <p className="text-muted-foreground font-mono text-sm mt-1">
-            Your street art design assistant
+            Powered by Lovable AI • Your street art design assistant
           </p>
         </div>
 
@@ -120,7 +200,7 @@ export default function Chat() {
                       {message.role === "assistant" ? "Leo AI" : "You"}
                     </span>
                   </div>
-                  <p className="font-mono text-sm text-foreground leading-relaxed">
+                  <p className="font-mono text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                     {message.content}
                   </p>
                 </div>
@@ -130,7 +210,7 @@ export default function Chat() {
 
           {/* Typing indicator */}
           <AnimatePresence>
-            {isTyping && (
+            {isLoading && messages[messages.length - 1]?.role === "user" && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -162,12 +242,13 @@ export default function Chat() {
         {/* Quick Actions */}
         <div className="px-4 pb-2">
           <div className="flex gap-2 overflow-x-auto pb-2">
-            {["Design a hoodie", "Create keychain", "Suggest playlist", "Neonify image"].map(
+            {["Design a neon skull hoodie", "Create a cyber tiger jacket", "Suggest hype playlist", "Neonify my photo"].map(
               (action) => (
                 <button
                   key={action}
                   onClick={() => setInput(action)}
-                  className="px-3 py-1.5 bg-muted rounded-full text-xs font-mono text-muted-foreground hover:text-neon-green hover:border-neon-green border border-transparent transition-all whitespace-nowrap"
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-muted rounded-full text-xs font-mono text-muted-foreground hover:text-neon-green hover:border-neon-green border border-transparent transition-all whitespace-nowrap disabled:opacity-50"
                 >
                   {action}
                 </button>
@@ -186,11 +267,11 @@ export default function Chat() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && handleSend()}
                 placeholder="Type your message..."
-                className="w-full px-4 py-3 bg-muted border-2 border-border rounded-xl font-mono text-sm focus:outline-none focus:border-neon-green focus:box-glow-green transition-all"
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-muted border-2 border-border rounded-xl font-mono text-sm focus:outline-none focus:border-neon-green focus:box-glow-green transition-all disabled:opacity-50"
               />
             </div>
             <button
-              onClick={() => {}}
               className="p-3 bg-muted rounded-xl border-2 border-border text-muted-foreground hover:text-neon-magenta hover:border-neon-magenta transition-all"
             >
               <Mic size={20} />
@@ -199,7 +280,7 @@ export default function Chat() {
               variant="green"
               size="sm"
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={!input.trim() || isLoading}
               className="px-4"
             >
               <Send size={20} />
