@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Upload, Wand2, Download, Share2, Sparkles } from "lucide-react";
+import { Upload, Wand2, Download, Share2, Sparkles, Loader2 } from "lucide-react";
 import { NeonCard } from "@/components/ui/NeonCard";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { GraffitiHeader } from "@/components/ui/GraffitiHeader";
@@ -19,6 +19,7 @@ export function AIToolsSection() {
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [selectedStyle, setSelectedStyle] = useState("neon-green");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -32,26 +33,98 @@ export function AIToolsSection() {
     }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!uploadedImage && !prompt) {
       toast.error("Upload an image or enter a prompt first!");
       return;
     }
 
     setIsProcessing(true);
-    
-    // Simulate AI generation
-    setTimeout(() => {
-      setGeneratedImages([
-        uploadedImage || "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=400&h=400&fit=crop",
-        "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=400&h=400&fit=crop",
-        "https://images.unsplash.com/photo-1549490349-8643362247b5?w=400&h=400&fit=crop",
-      ]);
-      setIsProcessing(false);
-      toast.success("Designs generated! 🔥", {
-        style: { background: "#0A0A0A", border: "2px solid #00FF41", color: "#00FF41" },
+    setGeneratedImages([]);
+
+    try {
+      if (selectedTool === "design" && uploadedImage) {
+        // Use neonify endpoint for image transformation
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/neonify-image`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ imageBase64: uploadedImage }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Transformation failed");
+        }
+
+        if (data.image) {
+          setGeneratedImages([data.image]);
+          toast.success("Design generated! 🔥", {
+            style: { background: "#0A0A0A", border: "2px solid #00FF41", color: "#00FF41" },
+          });
+        } else {
+          toast.info(data.textResponse || "No image generated", {
+            style: { background: "#0A0A0A", border: "2px solid #FFFF00", color: "#FFFF00" },
+          });
+        }
+      } else {
+        // Use generate-design endpoint for text-to-image
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-design`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ 
+              prompt: prompt || "neon skull with glowing eyes",
+              style: selectedStyle 
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Generation failed");
+        }
+
+        if (data.image) {
+          setGeneratedImages([data.image]);
+          toast.success(data.message || "Design generated! 🎨", {
+            style: { background: "#0A0A0A", border: "2px solid #00FF41", color: "#00FF41" },
+          });
+        } else {
+          toast.info(data.textResponse || "No image generated", {
+            style: { background: "#0A0A0A", border: "2px solid #FFFF00", color: "#FFFF00" },
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Generation error:", error);
+      toast.error(error instanceof Error ? error.message : "Generation failed", {
+        style: { background: "#0A0A0A", border: "2px solid #FF00FF", color: "#FF00FF" },
       });
-    }, 2000);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const downloadImage = (imageUrl: string, index: number) => {
+    const link = document.createElement("a");
+    link.href = imageUrl;
+    link.download = `leo-design-${index + 1}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Design downloaded! 📥");
   };
 
   return (
@@ -100,7 +173,7 @@ export function AIToolsSection() {
                     <img src={uploadedImage} alt="Uploaded" className="w-full h-full object-cover" />
                     <button
                       onClick={() => setUploadedImage(null)}
-                      className="absolute top-2 right-2 p-2 bg-background/80 rounded-full text-destructive"
+                      className="absolute top-2 right-2 p-2 bg-background/80 rounded-full text-destructive hover:bg-destructive hover:text-white transition-colors"
                     >
                       ×
                     </button>
@@ -132,22 +205,32 @@ export function AIToolsSection() {
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={
                     selectedTool === "generate"
-                      ? "Describe your design: neon skull with roses, cyberpunk style..."
+                      ? "Describe your design: neon skull with roses, cyberpunk tiger, glitch art roses..."
                       : "Click mic and describe your vision..."
                   }
-                  className="w-full h-24 px-4 py-3 bg-muted border-2 border-border rounded-xl font-mono text-sm resize-none focus:outline-none focus:border-neon-cyan"
+                  className="w-full h-24 px-4 py-3 bg-muted border-2 border-border rounded-xl font-mono text-sm resize-none focus:outline-none focus:border-neon-cyan transition-all"
                 />
               </div>
             )}
 
             {/* Style Options */}
             <div className="flex flex-wrap gap-2 mb-4">
-              {["Neon Green", "Cyber Blue", "Pink Glitch", "Yellow Fire"].map((style) => (
+              {[
+                { id: "neon-green", label: "Neon Green" },
+                { id: "cyber-blue", label: "Cyber Blue" },
+                { id: "pink-glitch", label: "Pink Glitch" },
+                { id: "yellow-fire", label: "Yellow Fire" },
+              ].map((style) => (
                 <button
-                  key={style}
-                  className="px-3 py-1.5 bg-muted rounded-full text-xs font-mono hover:bg-neon-magenta/20 hover:text-neon-magenta transition-all"
+                  key={style.id}
+                  onClick={() => setSelectedStyle(style.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-mono transition-all ${
+                    selectedStyle === style.id
+                      ? "bg-neon-magenta text-black"
+                      : "bg-muted hover:bg-neon-magenta/20 hover:text-neon-magenta"
+                  }`}
                 >
-                  {style}
+                  {style.label}
                 </button>
               ))}
             </div>
@@ -161,13 +244,13 @@ export function AIToolsSection() {
             >
               {isProcessing ? (
                 <span className="flex items-center gap-2">
-                  <Sparkles className="animate-spin" size={18} />
-                  Processing...
+                  <Loader2 className="animate-spin" size={18} />
+                  AI Processing...
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
                   <Wand2 size={18} />
-                  Generate Designs
+                  Generate Design
                 </span>
               )}
             </NeonButton>
@@ -184,7 +267,7 @@ export function AIToolsSection() {
           <GraffitiHeader size="sm" glowColor="magenta" className="mb-3">
             Generated Designs ✨
           </GraffitiHeader>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-4">
             {generatedImages.map((img, i) => (
               <motion.div
                 key={i}
@@ -193,21 +276,29 @@ export function AIToolsSection() {
                 transition={{ delay: i * 0.1 }}
                 className="relative group"
               >
-                <NeonCard glowColor={["green", "cyan", "magenta"][i] as any} className="p-0 overflow-hidden">
+                <NeonCard glowColor="green" className="p-0 overflow-hidden">
                   <div className="aspect-square">
                     <img
                       src={img}
                       alt={`Generated ${i + 1}`}
                       className="w-full h-full object-cover"
-                      style={{ filter: `hue-rotate(${i * 60}deg) saturate(1.5)` }}
                     />
                   </div>
-                  <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <button className="p-2 bg-neon-green rounded-lg text-black">
-                      <Download size={16} />
+                  <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                    <button 
+                      onClick={() => downloadImage(img, i)}
+                      className="p-3 bg-neon-green rounded-lg text-black hover:scale-110 transition-transform"
+                    >
+                      <Download size={20} />
                     </button>
-                    <button className="p-2 bg-neon-cyan rounded-lg text-black">
-                      <Share2 size={16} />
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(img);
+                        toast.success("Image URL copied!");
+                      }}
+                      className="p-3 bg-neon-cyan rounded-lg text-black hover:scale-110 transition-transform"
+                    >
+                      <Share2 size={20} />
                     </button>
                   </div>
                 </NeonCard>
