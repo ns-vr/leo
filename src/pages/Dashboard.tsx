@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Shirt, Music, KeyRound, Wand2, Upload, Sparkles } from "lucide-react";
+import { Shirt, Music, KeyRound, Wand2, Video } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { GraffitiHeader } from "@/components/ui/GraffitiHeader";
-import { NeonCard } from "@/components/ui/NeonCard";
-import { NeonButton } from "@/components/ui/NeonButton";
 import { MerchSection } from "@/components/dashboard/MerchSection";
 import { PlaylistSection } from "@/components/dashboard/PlaylistSection";
 import { KeychainSection } from "@/components/dashboard/KeychainSection";
 import { AIToolsSection } from "@/components/dashboard/AIToolsSection";
+import { YourWordsSection } from "@/components/dashboard/YourWordsSection";
 
 const tabs = [
   { id: "merch", label: "Merch", icon: Shirt, color: "green" as const },
   { id: "playlists", label: "Playlists", icon: Music, color: "cyan" as const },
   { id: "keychains", label: "Keychains", icon: KeyRound, color: "magenta" as const },
+  { id: "yourwords", label: "Your Words", icon: Video, color: "magenta" as const },
   { id: "ai", label: "AI Tools", icon: Wand2, color: "yellow" as const },
 ];
 
@@ -75,6 +75,7 @@ export default function Dashboard() {
           {activeTab === "merch" && <MerchSection />}
           {activeTab === "playlists" && <PlaylistSection />}
           {activeTab === "keychains" && <KeychainSection />}
+          {activeTab === "yourwords" && <YourWordsSection />}
           {activeTab === "ai" && <AIToolsSection />}
         </motion.div>
       </div>

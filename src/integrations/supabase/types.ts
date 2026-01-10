@@ -128,6 +128,89 @@ export type Database = {
         }
         Relationships: []
       }
+      watch_parties: {
+        Row: {
+          created_at: string
+          description: string | null
+          ended_at: string | null
+          id: string
+          is_live: boolean | null
+          scheduled_at: string | null
+          started_at: string | null
+          status: string | null
+          title: string
+          updated_at: string
+          user_id: string
+          video_storage_path: string | null
+          video_url: string | null
+          viewer_count: number | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          ended_at?: string | null
+          id?: string
+          is_live?: boolean | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+          video_storage_path?: string | null
+          video_url?: string | null
+          viewer_count?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          ended_at?: string | null
+          id?: string
+          is_live?: boolean | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+          video_storage_path?: string | null
+          video_url?: string | null
+          viewer_count?: number | null
+        }
+        Relationships: []
+      }
+      watch_party_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          party_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          party_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          party_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watch_party_comments_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "watch_parties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

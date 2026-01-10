@@ -6,13 +6,15 @@ interface NeonCardProps {
   className?: string;
   glowColor?: "green" | "cyan" | "magenta" | "yellow";
   hover?: boolean;
+  onClick?: () => void;
 }
 
 export function NeonCard({ 
   children, 
   className, 
   glowColor = "green",
-  hover = true 
+  hover = true,
+  onClick
 }: NeonCardProps) {
   const glowClasses = {
     green: "hover:box-glow-green border-neon-green/30",
@@ -23,11 +25,13 @@ export function NeonCard({
 
   return (
     <div
+      onClick={onClick}
       className={cn(
         "relative bg-card border-2 rounded-xl p-6",
         "transition-all duration-300",
         "spray-effect",
         hover && "hover:scale-[1.02] hover:-translate-y-1",
+        onClick && "cursor-pointer",
         glowClasses[glowColor],
         className
       )}
