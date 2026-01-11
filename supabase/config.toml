@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.generate-design]
 verify_jwt = false
+
+[functions.get-audio-playback]
+verify_jwt = false
+
+[functions.get-user-orders]
+verify_jwt = false
