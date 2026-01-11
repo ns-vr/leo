@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Video, Upload, Play, Users, MessageCircle, Send, 
   Radio, Calendar, Clock, Eye, X, Plus, Loader2,
-  Mic, MicOff, Volume2, VolumeX
+  Mic, MicOff, Volume2, VolumeX, MonitorUp
 } from "lucide-react";
 import { NeonCard } from "@/components/ui/NeonCard";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { GraffitiHeader } from "@/components/ui/GraffitiHeader";
+import { MediaRecorderUI } from "./MediaRecorderUI";
+import { WatchPartyReactions } from "./WatchPartyReactions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -30,6 +32,8 @@ interface Comment {
   created_at: string;
 }
 
+type VideoSource = "upload" | "url" | "record";
+
 export function YourWordsSection() {
   const [parties, setParties] = useState<WatchParty[]>([]);
   const [activeParty, setActiveParty] = useState<WatchParty | null>(null);
@@ -41,6 +45,7 @@ export function YourWordsSection() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [videoSource, setVideoSource] = useState<VideoSource>("upload");
   
   const [newParty, setNewParty] = useState({
     title: "",
@@ -125,6 +130,15 @@ export function YourWordsSection() {
     }
   };
 
+  const handleRecordingComplete = (blob: Blob, filename: string) => {
+    const file = new File([blob], filename, { type: blob.type });
+    setNewParty(prev => ({ ...prev, videoFile: file }));
+    setVideoSource("upload"); // Switch back to upload view to show the file
+    toast.success("Recording ready! 🎥", {
+      style: { background: "#0A0A0A", border: "2px solid #00FF41", color: "#00FF41" }
+    });
+  };
+
   const createWatchParty = async () => {
     if (!user) {
       toast.error("Please login to create a watch party");
@@ -185,6 +199,7 @@ export function YourWordsSection() {
 
       setShowCreateModal(false);
       setNewParty({ title: "", description: "", videoFile: null, videoUrl: "", isLive: false });
+      setVideoSource("upload");
       fetchParties();
       
       if (data) setActiveParty(data);
@@ -244,6 +259,12 @@ export function YourWordsSection() {
       style: { background: "#0A0A0A", border: "2px solid #00D4FF", color: "#00D4FF" }
     });
   };
+
+  const videoSourceOptions = [
+    { id: "upload" as const, label: "Upload", icon: Upload },
+    { id: "record" as const, label: "Record", icon: MonitorUp },
+    { id: "url" as const, label: "URL", icon: Video },
+  ];
 
   return (
     <div className="space-y-6">
@@ -307,6 +328,13 @@ export function YourWordsSection() {
                   <span className="text-sm font-mono">{activeParty.viewer_count}</span>
                 </div>
 
+                {/* Reactions Overlay */}
+                <WatchPartyReactions 
+                  partyId={activeParty.id} 
+                  userId={user?.id} 
+                  isActive={activeParty.is_live}
+                />
+
                 {/* Controls Overlay */}
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
                   <div className="flex items-center justify-between">
@@ -336,6 +364,17 @@ export function YourWordsSection() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Reaction Bar for Viewers */}
+                  {activeParty.is_live && (
+                    <div className="mt-3 flex justify-center">
+                      <WatchPartyReactions 
+                        partyId={activeParty.id} 
+                        userId={user?.id} 
+                        isActive={activeParty.is_live}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -476,7 +515,7 @@ export function YourWordsSection() {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md"
+              className="w-full max-w-md max-h-[90vh] overflow-y-auto"
             >
               <NeonCard glowColor="magenta">
                 <div className="flex items-center justify-between mb-6">
@@ -520,55 +559,81 @@ export function YourWordsSection() {
                     />
                   </div>
 
-                  {/* Video Upload */}
+                  {/* Video Source Tabs */}
                   <div>
                     <label className="text-sm font-mono text-muted-foreground mb-2 block">
-                      Upload Video
+                      Add Video
                     </label>
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
-                        newParty.videoFile 
-                          ? "border-neon-green bg-neon-green/10" 
-                          : "border-border hover:border-neon-cyan"
-                      }`}
-                    >
-                      {newParty.videoFile ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <Video size={24} className="text-neon-green" />
-                          <span className="text-neon-green font-mono text-sm truncate">
-                            {newParty.videoFile.name}
-                          </span>
-                        </div>
-                      ) : (
-                        <>
-                          <Upload size={32} className="mx-auto text-muted-foreground mb-2" />
-                          <p className="text-sm text-muted-foreground font-mono">
-                            Click to upload video (max 500MB)
-                          </p>
-                        </>
-                      )}
+                    <div className="flex gap-1 p-1 bg-muted rounded-xl mb-3">
+                      {videoSourceOptions.map(({ id, label, icon: Icon }) => (
+                        <button
+                          key={id}
+                          onClick={() => setVideoSource(id)}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-mono transition-all ${
+                            videoSource === id
+                              ? "bg-neon-cyan text-black"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <Icon size={16} />
+                          {label}
+                        </button>
+                      ))}
                     </div>
+
+                    {/* Upload Option */}
+                    {videoSource === "upload" && (
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+                          newParty.videoFile 
+                            ? "border-neon-green bg-neon-green/10" 
+                            : "border-border hover:border-neon-cyan"
+                        }`}
+                      >
+                        {newParty.videoFile ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <Video size={24} className="text-neon-green" />
+                            <span className="text-neon-green font-mono text-sm truncate">
+                              {newParty.videoFile.name}
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload size={32} className="mx-auto text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground font-mono">
+                              Click to upload video (max 500MB)
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Record Option */}
+                    {videoSource === "record" && (
+                      <MediaRecorderUI
+                        onRecordingComplete={handleRecordingComplete}
+                        onCancel={() => setVideoSource("upload")}
+                      />
+                    )}
+
+                    {/* URL Option */}
+                    {videoSource === "url" && (
+                      <input
+                        type="url"
+                        value={newParty.videoUrl}
+                        onChange={(e) => setNewParty(prev => ({ ...prev, videoUrl: e.target.value }))}
+                        placeholder="https://..."
+                        className="w-full px-4 py-3 bg-muted border-2 border-border rounded-xl font-mono focus:outline-none focus:border-neon-cyan transition-all"
+                      />
+                    )}
+
                     <input
                       ref={fileInputRef}
                       type="file"
                       accept="video/*"
                       onChange={handleVideoUpload}
                       className="hidden"
-                    />
-                  </div>
-
-                  {/* Or Video URL */}
-                  <div>
-                    <label className="text-sm font-mono text-muted-foreground mb-1 block">
-                      Or paste video URL
-                    </label>
-                    <input
-                      type="url"
-                      value={newParty.videoUrl}
-                      onChange={(e) => setNewParty(prev => ({ ...prev, videoUrl: e.target.value }))}
-                      placeholder="https://..."
-                      className="w-full px-4 py-3 bg-muted border-2 border-border rounded-xl font-mono focus:outline-none focus:border-neon-cyan transition-all"
                     />
                   </div>
 
